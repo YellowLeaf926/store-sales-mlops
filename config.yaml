@@ -1,0 +1,40 @@
+# Pipeline configuration
+# AWS credentials must be set via environment variables, NEVER hardcoded here:
+#   export AWS_ACCESS_KEY_ID=...
+#   export AWS_SECRET_ACCESS_KEY=...
+
+paths:
+  data_dir:    s3://423-finalproject-s3-061/
+  model_dir:   s3://423-finalproject-s3-061/models/
+  output_dir:  s3://423-finalproject-s3-061/processed/
+
+logging:
+  log_dir: logs/
+  level:   INFO
+
+monitoring:
+  metrics_file: logs/metrics.json
+  cloudwatch:
+    enabled:   true
+    namespace: StoreForecasting
+    region:    us-east-2
+
+training:
+  val_start: "2017-07-19"
+  val_end:   "2017-08-15"
+  tr_end:    "2017-07-18"
+  baseline_rmsle: 0.6900
+
+model:
+  n_estimators:        2000
+  learning_rate:       0.05
+  num_leaves:          63
+  min_child_samples:   20
+  feature_fraction:    0.8
+  bagging_fraction:    0.8
+  bagging_freq:        5
+  lambda_l1:           0.1
+  lambda_l2:           0.1
+  random_state:        42
+  early_stopping_rounds: 50
+  n_jobs:              -1

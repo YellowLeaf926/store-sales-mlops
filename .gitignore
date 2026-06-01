@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs and metrics (generated at runtime)
+logs/
+
+# Model artifacts (large binaries — store in S3)
+models/*.pkl
+
+# Data (raw and processed — store in S3)
+data/*.csv
+data/*.parquet
+
+# Credentials and secrets — NEVER commit these
+.env
+*.pem
+*.key
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local settings
+.claude/
