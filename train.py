@@ -116,8 +116,8 @@ def run(cfg: dict) -> None:
     TR_END = pd.Timestamp(tr_cfg["tr_end"])
 
     log.info("Loading feature data")
-    train_feat = pd.read_parquet(data_dir + "features_train.parquet")
-    test_feat = pd.read_parquet(data_dir + "features_test.parquet")
+    train_feat = pd.read_parquet(output_dir + "features_train.parquet")
+    test_feat = pd.read_parquet(output_dir + "features_test.parquet")
 
     NON_FEATURES = {"id", "date", "sales"}
     FEATURES = [c for c in train_feat.columns if c not in NON_FEATURES]

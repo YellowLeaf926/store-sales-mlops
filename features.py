@@ -94,8 +94,8 @@ def run(cfg: dict) -> None:
         os.makedirs(output_dir, exist_ok=True)
 
     log.info("Loading cleaned data")
-    train = pd.read_parquet(data_dir + "train_cleaned.parquet")
-    test = pd.read_parquet(data_dir + "test_cleaned.parquet")
+    train = pd.read_parquet(output_dir + "train_cleaned.parquet")
+    test = pd.read_parquet(output_dir + "test_cleaned.parquet")
 
     log.info("Combining train + test for lag computation")
     train["is_train"] = True

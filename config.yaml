@@ -4,9 +4,9 @@
 #   export AWS_SECRET_ACCESS_KEY=...
 
 paths:
-  data_dir:    s3://423-finalproject-s3-061/
-  model_dir:   s3://423-finalproject-s3-061/models/
-  output_dir:  s3://423-finalproject-s3-061/processed/
+  data_dir:    s3://mlds423-finalproject-s3-061/
+  model_dir:   s3://mlds423-finalproject-s3-061/models/
+  output_dir:  s3://mlds423-finalproject-s3-061/processed/
 
 logging:
   log_dir: logs/
