@@ -7,15 +7,15 @@ End-to-end LightGBM sales forecasting pipeline deployed on AWS — ECS training,
 - **ECS (Fargate)** — runs the training pipeline (preprocess → features → train)
 - **ECR** — stores Docker images for both training and inference
 - **Lambda (`store-sales-trigger`)** — event-driven trigger: fires on S3 upload, starts ECS retraining
-- **Lambda (`store-sales-inference`)** — on-demand inference endpoint, loads model from S3
-- **API Gateway** — HTTP API exposing `POST /predict`
+- **Lambda (`store-sales-inference`)** — on-demand inference endpoint, loads model from S3 *(optional inference path, not in final presentation)*
+- **API Gateway** — HTTP API exposing `POST /predict` *(optional inference path, not in final presentation)*
 - **CloudWatch** — logs and model performance metrics
 
 ### Deployment patterns
 | Pattern | Trigger | What happens |
 |---|---|---|
 | Event-driven retraining | Upload CSV to `s3://.../uploads/` | S3 → trigger Lambda → ECS reruns full pipeline |
-| On-demand inference | `POST /predict` | API Gateway → inference Lambda → predictions saved to S3 |
+| On-demand inference *(optional inference path, not in final presentation)* | `POST /predict` | API Gateway → inference Lambda → predictions saved to S3 |
 
 ## AWS Deployment
 
@@ -43,7 +43,7 @@ aws s3 cp transactions.csv s3://mlds423-finalproject-s3-061/
 ```
 
 ### 2. Build and push the training image
-> Note: steps 2–6 deploy to **us-east-2**. The trigger Lambda (step 7) deploys to **us-east-1** to match the S3 bucket region.
+> All services deploy to **us-east-2**.
 ```bash
 aws ecr create-repository --repository-name store-sales-pipeline --region us-east-2
 
@@ -99,25 +99,28 @@ Update the trust policy of `ecsTaskRole` to also allow Lambda:
    - Container image: `<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-pipeline:latest`
 3. Run task: Clusters → store-sales-cluster → Tasks → Run new task → Fargate
 
-### 6. Lambda inference endpoint
+### 6. Lambda inference endpoint ⚠️ Optional Inference Path — not included in final presentation
+> This section sets up an on-demand inference endpoint via API Gateway. It is fully functional but was not presented as part of the final project submission. Included here for reference only.
+
 1. Lambda → Create function → Container image
    - Name: `store-sales-inference`
    - Image: `<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-inference:latest`
    - Execution role: `ecsTaskRole`
 2. Set timeout to 5 min and memory to 2048 MB
 
-### 7. API Gateway
+### 7. API Gateway ⚠️ Optional Inference Path — not included in final presentation
+> Exposes the inference Lambda as a public HTTP endpoint. Functional but not part of the final project submission.
+
 1. API Gateway → Create API → HTTP API
 2. Integration: Lambda → `store-sales-inference`
 3. Route: `POST /predict`
 4. Deploy
 
-### 8. Event-driven retraining trigger (us-east-1)
-This Lambda fires whenever a CSV is uploaded to the `uploads/` prefix in S3, automatically triggering the ECS training pipeline.
+### 8. Event-driven retraining trigger
+This Lambda fires whenever a CSV is uploaded to S3, automatically triggering the appropriate ECS pipeline.
 
 **Create the trigger Lambda:**
-1. Switch console region to **us-east-1**
-2. Lambda → Create function → Author from scratch
+1. Lambda → Create function → Author from scratch
    - Name: `store-sales-trigger`
    - Runtime: Python 3.11
 3. Paste the code from `lambda_trigger.py`
