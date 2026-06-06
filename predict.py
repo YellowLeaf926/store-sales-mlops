@@ -102,17 +102,17 @@ def main():
     parser = argparse.ArgumentParser(description="Inference pipeline")
     parser.add_argument("--config", default="config.yaml", help="Config YAML path")
     parser.add_argument("--model", default=None, help="Model .pkl path (overrides config)")
-    parser.add_argument(
-        "--input", default="data/features_test.parquet", help="Input feature Parquet path"
-    )
-    parser.add_argument("--output", default="data/predictions.csv", help="Output CSV path")
+    parser.add_argument("--input", default=None, help="Input feature Parquet path")
+    parser.add_argument("--output", default=None, help="Output CSV path")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     setup_logging(cfg["logging"]["log_dir"], cfg["logging"]["level"])
     model_path = args.model or (cfg["paths"]["model_dir"] + "lgb_model.pkl")
+    input_path = args.input or (cfg["paths"]["output_dir"] + "features_test.parquet")
+    output_path = args.output or (cfg["paths"]["output_dir"] + "predictions.csv")
 
-    run(model_path, args.input, args.output, cfg["monitoring"])
+    run(model_path, input_path, output_path, cfg["monitoring"])
 
 
 if __name__ == "__main__":

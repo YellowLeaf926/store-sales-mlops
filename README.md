@@ -6,9 +6,16 @@ End-to-end LightGBM sales forecasting pipeline deployed on AWS — ECS training,
 - **S3** — raw data, processed features, trained model artifacts, and predictions
 - **ECS (Fargate)** — runs the training pipeline (preprocess → features → train)
 - **ECR** — stores Docker images for both training and inference
-- **Lambda** — on-demand inference endpoint, loads model from S3
+- **Lambda (`store-sales-trigger`)** — event-driven trigger: fires on S3 upload, starts ECS retraining
+- **Lambda (`store-sales-inference`)** — on-demand inference endpoint, loads model from S3
 - **API Gateway** — HTTP API exposing `POST /predict`
 - **CloudWatch** — logs and model performance metrics
+
+### Deployment patterns
+| Pattern | Trigger | What happens |
+|---|---|---|
+| Event-driven retraining | Upload CSV to `s3://.../uploads/` | S3 → trigger Lambda → ECS reruns full pipeline |
+| On-demand inference | `POST /predict` | API Gateway → inference Lambda → predictions saved to S3 |
 
 ## AWS Deployment
 
@@ -36,6 +43,7 @@ aws s3 cp transactions.csv s3://mlds423-finalproject-s3-061/
 ```
 
 ### 2. Build and push the training image
+> Note: steps 2–6 deploy to **us-east-2**. The trigger Lambda (step 7) deploys to **us-east-1** to match the S3 bucket region.
 ```bash
 aws ecr create-repository --repository-name store-sales-pipeline --region us-east-2
 
@@ -46,7 +54,7 @@ docker tag store-sales-pipeline:latest <ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.
 docker push <ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-pipeline:latest
 ```
 
-### 2. Build and push the inference image
+### 3. Build and push the inference image
 ```bash
 aws ecr create-repository --repository-name store-sales-inference --region us-east-2
 
@@ -55,7 +63,7 @@ docker tag store-sales-inference:latest <ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws
 docker push <ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-inference:latest
 ```
 
-### 3. IAM roles
+### 4. IAM roles
 Create two IAM roles in the AWS console (IAM → Roles → Create role → Elastic Container Service Task):
 
 **ecsTaskExecutionRole** — attach policy:
@@ -81,7 +89,7 @@ Update the trust policy of `ecsTaskRole` to also allow Lambda:
 }
 ```
 
-### 4. ECS training pipeline
+### 5. ECS training pipeline
 1. Create cluster: ECS → Clusters → Create → Fargate → name `store-sales-cluster`
 2. Create task definition: ECS → Task Definitions → Create
    - Launch type: Fargate
@@ -91,18 +99,75 @@ Update the trust policy of `ecsTaskRole` to also allow Lambda:
    - Container image: `<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-pipeline:latest`
 3. Run task: Clusters → store-sales-cluster → Tasks → Run new task → Fargate
 
-### 5. Lambda inference endpoint
+### 6. Lambda inference endpoint
 1. Lambda → Create function → Container image
    - Name: `store-sales-inference`
    - Image: `<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-inference:latest`
    - Execution role: `ecsTaskRole`
 2. Set timeout to 5 min and memory to 2048 MB
 
-### 6. API Gateway
+### 7. API Gateway
 1. API Gateway → Create API → HTTP API
 2. Integration: Lambda → `store-sales-inference`
 3. Route: `POST /predict`
 4. Deploy
+
+### 8. Event-driven retraining trigger (us-east-1)
+This Lambda fires whenever a CSV is uploaded to the `uploads/` prefix in S3, automatically triggering the ECS training pipeline.
+
+**Create the trigger Lambda:**
+1. Switch console region to **us-east-1**
+2. Lambda → Create function → Author from scratch
+   - Name: `store-sales-trigger`
+   - Runtime: Python 3.11
+3. Paste the code from `lambda_trigger.py`
+4. Go to **Code → Runtime settings → Edit** → set Handler to `lambda_function.handler`
+5. Click **Deploy**
+
+**Grant ECS permissions to the trigger Lambda:**
+1. Lambda → Configuration → Permissions → click the execution role
+2. IAM → Add permissions → Create inline policy → JSON:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ecs:RunTask", "iam:PassRole"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+3. Name it `ecs-runtask` → Create policy
+
+**Configure S3 event notification:**
+1. S3 → mlds423-finalproject-s3-061 → Properties → Event notifications → Create
+   - Name: `trigger-pipeline`
+   - Prefix: (empty)
+   - Suffix: (empty)
+   - Event type: **All object create events** (`s3:ObjectCreated:*`)
+   - Destination: Lambda → `store-sales-trigger`
+2. Save
+
+> **Event routing logic (`lambda_trigger.py`):** The trigger Lambda inspects the filename of the uploaded object and routes to the appropriate ECS pipeline:
+> - Filename ends with `train.csv` → ECS runs `preprocess.py → features.py → train.py` (full retraining)
+> - Filename ends with `test.csv` → ECS runs `preprocess.py → features.py → predict.py` (inference, predictions saved to S3)
+> - Any other filename → ignored, no ECS task started
+
+> Use `s3:ObjectCreated:*` (not just PUT) to ensure multipart uploads (used by `aws s3 cp` for large files) also trigger the notification.
+
+**Trigger a retrain:**
+```bash
+aws s3api put-object --bucket mlds423-finalproject-s3-061 --key train.csv --body train.csv
+```
+
+**Trigger inference on new test data:**
+```bash
+aws s3api put-object --bucket mlds423-finalproject-s3-061 --key test.csv --body test.csv
+```
+
+Check ECS → Clusters → store-sales-cluster → Tasks to see the task start automatically.
 
 ### Troubleshooting: Lambda 403 on S3
 If the Lambda function returns `403 Forbidden` when accessing S3 despite having `AmazonS3FullAccess`, add an explicit inline policy directly to `ecsTaskRole`:
@@ -126,11 +191,21 @@ If the Lambda function returns `403 Forbidden` when accessing S3 despite having 
 2. Name it `s3-bucket-access` → Create policy
 
 ### Running inference
+Use default paths from `config.yaml` (runs on `features_test.parquet` already in S3):
 ```bash
 curl -X POST https://<API_ID>.execute-api.us-east-2.amazonaws.com/predict \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
+
+Or pass a custom pre-engineered features parquet:
+```bash
+curl -X POST https://<API_ID>.execute-api.us-east-2.amazonaws.com/predict \
+  -H "Content-Type: application/json" \
+  -d '{"input_path": "s3://mlds423-finalproject-s3-061/processed/my-features.parquet"}'
+```
+
+> **Note:** `input_path` must be a pre-engineered parquet file (output of `features.py`) with lag features and rolling stats already computed — not a raw CSV.
 
 Returns:
 ```json
@@ -152,7 +227,8 @@ Returns:
 ├── train.py                # Step 3: model training, saves artifact to S3
 ├── predict.py              # Step 4: inference, loads model from S3
 ├── monitor.py              # CloudWatch metrics + logging utilities
-├── lambda_handler.py       # Lambda entry point wrapping predict.py
+├── lambda_handler.py       # Inference Lambda entry point wrapping predict.py
+├── lambda_trigger.py       # Trigger Lambda: responds to S3 uploads, starts ECS task
 └── requirements.txt
 ```
 
