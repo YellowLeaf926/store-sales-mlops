@@ -7,15 +7,15 @@ End-to-end LightGBM sales forecasting pipeline deployed on AWS — ECS training,
 - **ECS (Fargate)** — runs the training pipeline (preprocess → features → train)
 - **ECR** — stores Docker images for both training and inference
 - **Lambda (`store-sales-trigger`)** — event-driven trigger: fires on S3 upload, starts ECS retraining
-- **Lambda (`store-sales-inference`)** — on-demand inference endpoint, loads model from S3 *(optional inference path, not in final presentation)*
-- **API Gateway** — HTTP API exposing `POST /predict` *(optional inference path, not in final presentation)*
+- **Lambda (`store-sales-inference`)** — on-demand inference endpoint, loads model from S3 
+- **API Gateway** — HTTP API exposing `POST /predict` 
 - **CloudWatch** — logs and model performance metrics
 
 ### Deployment patterns
 | Pattern | Trigger | What happens |
 |---|---|---|
 | Event-driven retraining | Upload CSV to `s3://.../uploads/` | S3 → trigger Lambda → ECS reruns full pipeline |
-| On-demand inference *(optional inference path, not in final presentation)* | `POST /predict` | API Gateway → inference Lambda → predictions saved to S3 |
+| On-demand inference  | `POST /predict` | API Gateway → inference Lambda → predictions saved to S3 |
 
 ## AWS Deployment
 
@@ -99,7 +99,7 @@ Update the trust policy of `ecsTaskRole` to also allow Lambda:
    - Container image: `<ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/store-sales-pipeline:latest`
 3. Run task: Clusters → store-sales-cluster → Tasks → Run new task → Fargate
 
-### 6. Lambda inference endpoint ⚠️ Optional Inference Path — not included in final presentation
+### 6. Lambda inference endpoint 
 > This section sets up an on-demand inference endpoint via API Gateway. It is fully functional but was not presented as part of the final project submission. Included here for reference only.
 
 1. Lambda → Create function → Container image
@@ -108,7 +108,7 @@ Update the trust policy of `ecsTaskRole` to also allow Lambda:
    - Execution role: `ecsTaskRole`
 2. Set timeout to 5 min and memory to 2048 MB
 
-### 7. API Gateway ⚠️ Optional Inference Path — not included in final presentation
+### 7. API Gateway 
 > Exposes the inference Lambda as a public HTTP endpoint. Functional but not part of the final project submission.
 
 1. API Gateway → Create API → HTTP API
